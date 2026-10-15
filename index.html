@@ -1,331 +1,93 @@
-
 <!DOCTYPE html>
 <html lang="ms">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-
-  <title>Pengimbas Kehadiran Pelajar</title>
-
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #eef5f2;
-      color: #173f35;
-    }
-
-    .wrap {
-      max-width: 620px;
-      margin: auto;
-      padding: 16px;
-    }
-
-    header {
-      background: linear-gradient(120deg,#12372e,#237b61);
-      color: white;
-      padding: 22px;
-      border-radius: 15px;
-      text-align: center;
-    }
-
-    h1 { font-size: 22px; margin: 0 0 8px; }
-
-    .panel {
-      background: white;
-      padding: 18px;
-      margin-top: 15px;
-      border-radius: 14px;
-      box-shadow: 0 2px 14px #0001;
-    }
-
-    button {
-      border: 0;
-      border-radius: 10px;
-      background: #176b52;
-      color: white;
-      padding: 13px 16px;
-      font-weight: bold;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    .secondary { background: #536d65; }
-
-    button:disabled { opacity: .5; }
-
-    #reader {
-      width: 100%;
-      margin-top: 15px;
-    }
-
-    #reader video {
-      max-height: 450px;
-      object-fit: cover;
-    }
-
-    #status {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    #list {
-      max-height: 230px;
-      overflow-y: auto;
-    }
-
-    li { padding: 6px 0; }
-
-    .small {
-      font-size: 13px;
-      color: #5c7069;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pengimbas Kehadiran Pelajar</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#eef5f2;color:#173f35}.wrap{max-width:620px;margin:auto;padding:16px}header{background:linear-gradient(120deg,#12372e,#237b61);color:white;padding:22px;border-radius:15px;text-align:center}h1{font-size:22px;margin:0 0 8px}.panel{background:white;padding:18px;margin-top:15px;border-radius:14px;box-shadow:0 2px 14px #0001}button{border:0;border-radius:10px;background:#176b52;color:white;padding:13px 16px;font-weight:bold;font-size:16px;cursor:pointer}.secondary{background:#536d65}button:disabled{opacity:.5}#reader{width:100%;margin-top:15px}#reader video{max-height:450px;object-fit:cover}#status{white-space:pre-wrap;overflow-wrap:anywhere}#list{max-height:230px;overflow-y:auto}li{padding:6px 0}.small{font-size:13px;color:#5c7069}.ok{color:#13734c}.bad{color:#b23c3c}
+</style>
 </head>
-
 <body>
-
 <div class="wrap">
-
-  <header>
-    <h1>📷 PENGIMBAS KEHADIRAN</h1>
-    <div id="mode">Memuatkan...</div>
-  </header>
-
-  <div class="panel">
-
-    <p id="status" role="status">
-      Sedia untuk mengimbas.
-    </p>
-
-    <button id="start">Aktifkan Kamera</button>
-    <button id="stop" class="secondary">
-      Hentikan
-    </button>
-
-    <div id="reader"></div>
-
-    <p class="small">
-      Pengimbas menghantar No. IC ke tab
-      Google Apps Script yang membuka halaman ini.
-      Pastikan kedua-dua tab kekal terbuka.
-    </p>
-
-    <p>
-      <b>Jumlah imbasan dihantar:</b>
-      <span id="count">0</span>
-    </p>
-
-    <ul id="list"></ul>
-
-  </div>
-</div>
-
+<header><h1>📷 PENGIMBAS KEHADIRAN</h1><div id="mode">Memuatkan...</div></header>
+<div class="panel">
+<p id="status" role="status">Sedia untuk mengimbas.</p>
+<button id="start">Aktifkan Kamera</button>
+<button id="stop" class="secondary">Hentikan</button>
+<div id="reader"></div>
+<p class="small">Pengimbas menghantar No. IC ke tab Google Apps Script yang membuka halaman ini. Pastikan kedua-dua tab kekal terbuka.</p>
+<p><b>Jumlah imbasan dihantar:</b> <span id="count">0</span></p>
+<ul id="list"></ul>
+</div></div>
 <script>
-  const params = new URLSearchParams(location.search);
-
-  const mode = params.get('mode');
-  const nonce = params.get('nonce');
-  const receiver = params.get('receiver');
-
-  const $ = id => document.getElementById(id);
-
-  let scanner = null;
-  let last = new Map();
-  let count = 0;
-
-  const valid =
-    window.opener &&
-    ['HADIR', 'LEWAT'].includes(mode) &&
-    nonce &&
-    /^[a-f0-9]{40}$/.test(nonce) &&
-    receiver &&
-    /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(receiver);
-
-  $('mode').textContent = valid
-    ? 'MOD KEHADIRAN: ' + mode
-    : 'Buka melalui Sistem Kehadiran Apps Script';
-
-  function message(text) {
-    $('status').textContent = text;
-  }
-
-  function extractIC(raw) {
-    const text = String(raw || '').trim();
-
-    const match = text.match(
-      /(?:^|\D)(\d{6}[- ]?\d{2}[- ]?\d{4})(?:\D|$)/
-    );
-
-    return match
-      ? match[1].replace(/\D/g, '')
-      : '';
-  }
-
-  function onScan(raw) {
-    const ic = extractIC(raw);
-
-    if (!ic) {
-      message('Kod tidak mengandungi No. IC 12 digit.');
-      return;
-    }
-
-    const now = Date.now();
-
-    if (now - (last.get(ic) || 0) < 8000) {
-      return;
-    }
-
-    last.set(ic, now);
-
-    if (last.size > 150) {
-      for (const [key, time] of last) {
-        if (now - time > 30000) {
-          last.delete(key);
-        }
-      }
-    }
-
-    if (!valid) {
-      message('Buka pengimbas daripada Apps Script.');
-      return;
-    }
-
-    window.opener.postMessage({
-      type: 'KVS_ATTENDANCE_SCAN',
-      nonce: nonce,
-      mode: mode,
-      code: ic
-    }, receiver);
-
-    count++;
-
-    $('count').textContent = count;
-
-    const li = document.createElement('li');
-
-    li.textContent =
-      'Kod dihantar: ' +
-      ic.slice(0, 2) +
-      '********' +
-      ic.slice(-2);
-
-    $('list').prepend(li);
-
-    message(
-      'Kod dihantar ke Apps Script. ' +
-      'Semak status rekod pada dashboard utama.'
-    );
-  }
-
-  async function stopCamera() {
-    if (scanner) {
-      try {
-        await scanner.stop();
-      } catch (e) {}
-
-      try {
-        scanner.clear();
-      } catch (e) {}
-
-      scanner = null;
-    }
-  }
-
-  async function startCamera() {
-    if (!valid) {
-      message(
-        'Buka pengimbas melalui butang HADIR ' +
-        'atau LEWAT di Apps Script.'
-      );
-      return;
-    }
-
-    if (typeof Html5Qrcode === 'undefined') {
-      message('Library pengimbas gagal dimuatkan.');
-      return;
-    }
-
-    await stopCamera();
-
-    try {
-      scanner = new Html5Qrcode('reader', {
-        verbose: false
-      });
-
-      const options = {
-        fps: 12,
-
-        qrbox: (width, height) => ({
-          width: Math.min(260, Math.floor(width * .75)),
-          height: Math.min(220, Math.floor(height * .6))
-        }),
-
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.PDF_417,
-          Html5QrcodeSupportedFormats.DATA_MATRIX
-        ]
-      };
-
-      try {
-        await scanner.start(
-          { facingMode: 'environment' },
-          options,
-          onScan,
-          () => {}
-        );
-
-      } catch (error) {
-        const cameras = await Html5Qrcode.getCameras();
-
-        if (!cameras.length) throw error;
-
-        await scanner.start(
-          cameras[cameras.length - 1].id,
-          options,
-          onScan,
-          () => {}
-        );
-      }
-
-      message(
-        'Kamera aktif. Halakan kepada QR Code ' +
-        'atau barcode No. IC.'
-      );
-
-    } catch (error) {
-      message(
-        'Kamera gagal: ' +
-        (error.message || error)
-      );
-
-      scanner = null;
-    }
-  }
-
-  $('start').onclick = startCamera;
-  $('stop').onclick = stopCamera;
-
-  window.addEventListener('beforeunload', () => {
-    if (scanner) {
-      scanner.stop().catch(() => {});
-    }
+const params=new URLSearchParams(location.search);
+const mode=params.get('mode'),nonce=params.get('nonce'),receiver=params.get('receiver');
+const $=id=>document.getElementById(id);
+let scanner=null,last=new Map(),count=0,audioCtx=null;
+const valid=!!(window.opener&&['HADIR','LEWAT'].includes(mode)&&nonce&&/^[a-f0-9]{40}$/.test(nonce)&&receiver&&/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(receiver));
+$('mode').textContent=valid?'MOD KEHADIRAN: '+mode:'Buka melalui Sistem Kehadiran Apps Script';
+function message(text){$('status').textContent=text}
+function unlockSound(){try{const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)return;if(!audioCtx)audioCtx=new AudioContextClass();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{})}catch(e){}}
+function beep(kind='scan'){
+ try{
+  unlockSound();if(!audioCtx||audioCtx.state!=='running')return;
+  const t=audioCtx.currentTime;
+  const notes=kind==='success'?[[880,0,.10],[1175,.13,.13]]:kind==='error'?[[300,0,.19]]:[[750,0,.09]];
+  notes.forEach(([hz,offset,duration])=>{
+   const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+   osc.type='sine';osc.frequency.value=hz;
+   gain.gain.setValueAtTime(.0001,t+offset);
+   gain.gain.exponentialRampToValueAtTime(.16,t+offset+.012);
+   gain.gain.exponentialRampToValueAtTime(.0001,t+offset+duration);
+   osc.connect(gain);gain.connect(audioCtx.destination);
+   osc.start(t+offset);osc.stop(t+offset+duration+.01);
   });
-
-  if (valid) {
-    startCamera();
-  } else {
-    $('start').disabled = true;
-  }
+ }catch(e){/* Audio mungkin disekat oleh pelayar. Imbasan tetap berfungsi. */}
+}
+function extractIC(raw){const text=String(raw||'').trim(),match=text.match(/(?:^|\D)(\d{6}[- ]?\d{2}[- ]?\d{4})(?:\D|$)/);return match?match[1].replace(/\D/g,''):''}
+function mask(ic){return ic.slice(0,2)+'********'+ic.slice(-2)}
+function onScan(raw){
+ const ic=extractIC(raw);
+ if(!ic){message('Kod tidak mengandungi No. IC 12 digit.');return}
+ const now=Date.now();if(now-(last.get(ic)||0)<8000)return;
+ if(!valid){message('Buka pengimbas daripada Apps Script.');return}
+ last.set(ic,now);
+ if(last.size>150)for(const [key,time] of last)if(now-time>30000)last.delete(key);
+ // Bunyi pendek bermaksud barcode berjaya dibaca dan dihantar, belum disahkan disimpan.
+ beep('scan');
+ window.opener.postMessage({type:'KVS_ATTENDANCE_SCAN',nonce,mode,code:ic},receiver);
+ count++;$('count').textContent=count;
+ const li=document.createElement('li');li.dataset.ic=ic;li.textContent='⏳ Kod dihantar: '+mask(ic)+' — Menunggu pengesahan';$('list').prepend(li);
+ message('✓ Barcode berjaya diimbas dan dihantar. Menunggu pengesahan rekod...');
+}
+// Pengesahan sebenar diterima selepas Apps Script menyimpan / menyemak rekod.
+window.addEventListener('message',event=>{
+ if(event.origin!==receiver||event.source!==window.opener)return;
+ const d=event.data;if(!d||d.type!=='KVS_ATTENDANCE_RESULT'||d.nonce!==nonce)return;
+ const ok=d.status==='BERJAYA';
+ const item=[...$('list').querySelectorAll('li')].find(el=>el.dataset.ic===d.ic&&el.textContent.includes('Menunggu'));
+ if(item){item.textContent=(ok?'✓ ':'⚠ ')+mask(d.ic)+' — '+(d.message||d.status);item.className=ok?'ok':'bad'}
+ if(ok){beep('success');message('✓ Rekod kehadiran berjaya disimpan: '+mask(d.ic))}
+ else{beep('error');message('⚠ Rekod tidak disimpan: '+(d.message||d.status));last.delete(d.ic)}
+});
+async function stopCamera(){if(scanner){try{await scanner.stop()}catch(e){}try{scanner.clear()}catch(e){}scanner=null}}
+async function startCamera(){
+ unlockSound();
+ if(!valid){message('Buka pengimbas melalui butang HADIR atau LEWAT di Apps Script.');return}
+ if(typeof Html5Qrcode==='undefined'){message('Library pengimbas gagal dimuatkan.');return}
+ await stopCamera();
+ try{
+  scanner=new Html5Qrcode('reader',{verbose:false});
+  const options={fps:12,qrbox:(width,height)=>({width:Math.min(260,Math.floor(width*.75)),height:Math.min(220,Math.floor(height*.6))}),formatsToSupport:[Html5QrcodeSupportedFormats.QR_CODE,Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,Html5QrcodeSupportedFormats.PDF_417,Html5QrcodeSupportedFormats.DATA_MATRIX]};
+  try{await scanner.start({facingMode:'environment'},options,onScan,()=>{})}
+  catch(error){const cameras=await Html5Qrcode.getCameras();if(!cameras.length)throw error;await scanner.start(cameras[cameras.length-1].id,options,onScan,()=>{})}
+  message('Kamera aktif. Halakan kepada QR Code atau barcode No. IC.');
+ }catch(error){message('Kamera gagal: '+(error.message||error));scanner=null}
+}
+$('start').onclick=startCamera;$('stop').onclick=stopCamera;
+window.addEventListener('beforeunload',()=>{if(scanner)scanner.stop().catch(()=>{})});
+if(valid){startCamera()}else{$('start').disabled=true}
 </script>
-
-</body>
-</html>
+</body></html>
