@@ -34,12 +34,14 @@ function beep(kind='scan'){
  try{
   unlockSound();if(!audioCtx||audioCtx.state!=='running')return;
   const t=audioCtx.currentTime;
-  const notes=kind==='success'?[[880,0,.10],[1175,.13,.13]]:kind==='error'?[[300,0,.19]]:[[750,0,.09]];
+  // Setiap jenis isyarat berbunyi selama 0.5 saat; gain ditingkatkan.
+  const notes=kind==='success'?[[880,0,.24],[1175,.25,.25]]:kind==='error'?[[300,0,.50]]:[[750,0,.50]];
   notes.forEach(([hz,offset,duration])=>{
    const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
    osc.type='sine';osc.frequency.value=hz;
    gain.gain.setValueAtTime(.0001,t+offset);
-   gain.gain.exponentialRampToValueAtTime(.16,t+offset+.012);
+   gain.gain.exponentialRampToValueAtTime(.65,t+offset+.015);
+   gain.gain.setValueAtTime(.65,t+offset+duration-.045);
    gain.gain.exponentialRampToValueAtTime(.0001,t+offset+duration);
    osc.connect(gain);gain.connect(audioCtx.destination);
    osc.start(t+offset);osc.stop(t+offset+duration+.01);
@@ -55,14 +57,12 @@ function onScan(raw){
  if(!valid){message('Buka pengimbas daripada Apps Script.');return}
  last.set(ic,now);
  if(last.size>150)for(const [key,time] of last)if(now-time>30000)last.delete(key);
- // Bunyi pendek bermaksud barcode berjaya dibaca dan dihantar, belum disahkan disimpan.
  beep('scan');
  window.opener.postMessage({type:'KVS_ATTENDANCE_SCAN',nonce,mode,code:ic},receiver);
  count++;$('count').textContent=count;
  const li=document.createElement('li');li.dataset.ic=ic;li.textContent='⏳ Kod dihantar: '+mask(ic)+' — Menunggu pengesahan';$('list').prepend(li);
  message('✓ Barcode berjaya diimbas dan dihantar. Menunggu pengesahan rekod...');
 }
-// Pengesahan sebenar diterima selepas Apps Script menyimpan / menyemak rekod.
 window.addEventListener('message',event=>{
  if(event.origin!==receiver||event.source!==window.opener)return;
  const d=event.data;if(!d||d.type!=='KVS_ATTENDANCE_RESULT'||d.nonce!==nonce)return;
